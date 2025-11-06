@@ -25,7 +25,7 @@ Steps
 4. Start the dev server:
    - `npm run dev`
 
-The dev server will print a local URL (usually `http://localhost:5173`) to open in your browser.
+The dev server will print a local URL. Default Vite port is 5173, but this project is configured for http://localhost:3000 (see `agentic-ai-os-dashboard/vite.config.ts`).
 
 Building for production
 - From `agentic-ai-os-dashboard/` run `npm run build`. The production output is placed in `dist/`.
