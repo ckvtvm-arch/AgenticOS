@@ -1,48 +1,58 @@
-# AgenticOS
+## AgenticOS
 
-Design and architect a next‑generation operating system specifically optimized for Agentic AI systems. This OS treats AI agents as first‑class citizens, enabling seamless multi‑agent orchestration, secure resource management, and native AI‑to‑system integration. The OS rethinks computing paradigms for an AI‑native world.
+AgenticOS is an experimental project that explores operating‑system primitives and tooling optimized for multi‑agent AI systems. It treats AI agents as first‑class citizens, focusing on secure resource management, coordinated orchestration, and native AI-to-system integration.
 
-## Repository layout
+This repository currently provides a developer dashboard and initial UI components for local development and demos. The project is evolving; expect additional services, CLI tools, and architecture modules to be added over time.
 
-- `agentic-ai-os-dashboard/` — Vite + React dashboard for local development and demos
-- More components will be added here as the OS architecture takes shape
+## Quick project layout
 
-## Quick start: Dashboard
+- `agentic-ai-os-dashboard/` — Vite + React dashboard used for local development and demos
 
-Prerequisites:
+## Quick start — dashboard (local dev)
+
+Prerequisites
 - Node.js 18+ (LTS recommended)
-- npm 10+
+- npm 10+ (or compatible package manager)
 
-Steps:
-1) Change into the dashboard:
+Steps
+1. Change into the dashboard directory:
    - `cd agentic-ai-os-dashboard`
-2) Install dependencies:
-   - `npm ci` (preferred) or `npm install`
-3) Configure environment:
-   - Create a file named `.env.local` in the same directory and set:
+2. Install dependencies:
+   - `npm ci` (preferred for CI reproducibility) or `npm install`
+3. Configure local environment (optional):
+   - Create `.env.local` and add any keys the dashboard expects (example):
      - `GEMINI_API_KEY=your_key_here`
-4) Run the dev server:
+4. Start the dev server:
    - `npm run dev`
 
-The app will print a local URL to open in your browser.
+The dev server will print a local URL (usually `http://localhost:5173`) to open in your browser.
 
-## Common issues
+Building for production
+- From `agentic-ai-os-dashboard/` run `npm run build`. The production output is placed in `dist/`.
 
-- EBADPLATFORM (inotify) on macOS:
-  - Symptom: `Unsupported platform for inotify@...: wanted {"os":"linux"} (current: {"os":"darwin"})`
-  - Cause: Installing a Linux‑only package (e.g., `inotify`) on macOS or running `npm install` in the wrong directory.
+## Troubleshooting
+
+- EBADPLATFORM / inotify on macOS
+  - Symptom: Unsupported platform errors mentioning `inotify`.
+  - Cause: A Linux‑only dependency was installed or `npm install` was run in the wrong folder.
   - Fix:
-    - Ensure you are inside `agentic-ai-os-dashboard/` before running `npm install`.
-    - If the error persists, remove `node_modules` and `package-lock.json`, then reinstall: `rm -rf node_modules package-lock.json && npm ci`.
-    - This project does not require `inotify` on macOS; Vite uses cross‑platform file watching.
+    1. Make sure you run `npm ci` or `npm install` from inside `agentic-ai-os-dashboard/`.
+    2. If problems persist: `rm -rf node_modules package-lock.json && npm ci`.
 
-- No package.json at repository root:
-  - Run `npm install` only inside `agentic-ai-os-dashboard/`.
+- Missing `package.json` at the repository root
+  - Only run Node/npm commands inside `agentic-ai-os-dashboard/` — the repository root doesn't contain a JS project.
 
 ## Contributing
 
-- Open issues or PRs as the architecture and modules are introduced.
-- Please avoid committing secrets; use `.env.local` for local configuration.
+- Issues and PRs are welcome. Please open an issue first for larger changes or RFCs.
+- Avoid committing secrets — use `.env.local` (and add it to `.gitignore`) for local keys.
+
+If you'd like to contribute frontend work, open a PR against `agentic-ai-os-dashboard/` and ensure the local dev server builds and runs.
+
+## Next steps / roadmap
+
+- Add architecture diagrams and an `ARCHITECTURE.md` describing core OS primitives for agent lifecycle and resource scheduling
+- Add a `CONTRIBUTING.md` with detailed developer setup and code style guidelines
 
 ## License
 
