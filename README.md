@@ -4,6 +4,14 @@ AgenticOS is an experimental project that explores operating‑system primitives
 
 This repository currently provides a developer dashboard and initial UI components for local development and demos. The project is evolving; expect additional services, CLI tools, and architecture modules to be added over time.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System architecture, layers, components, data flow, and tech choices |
+| [`ROADMAP.md`](./ROADMAP.md) | Phased development milestones with acceptance criteria |
+| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Developer setup guide, coding standards, and PR workflow |
+
 ## Quick project layout
 
 - `agentic-ai-os-dashboard/` — Vite + React dashboard used for local development and demos
@@ -44,15 +52,20 @@ Building for production
 
 ## Contributing
 
-- Issues and PRs are welcome. Please open an issue first for larger changes or RFCs.
-- Avoid committing secrets — use `.env.local` (and add it to `.gitignore`) for local keys.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for detailed guidance on:
+- Setting up a development environment
+- Coding standards (TypeScript, Python)
+- Pull request workflow and checklist
+- Finding the right area to contribute based on your skills
 
-If you'd like to contribute frontend work, open a PR against `agentic-ai-os-dashboard/` and ensure the local dev server builds and runs.
+## Roadmap
 
-## Next steps / roadmap
+See [`ROADMAP.md`](./ROADMAP.md) for the full phased development plan.
 
-- Add architecture diagrams and an `ARCHITECTURE.md` describing core OS primitives for agent lifecycle and resource scheduling
-- Add a `CONTRIBUTING.md` with detailed developer setup and code style guidelines
+**Near-term priorities (Phase 1):**
+- FastAPI backend server with REST + WebSocket endpoints
+- Wire dashboard to live backend data (replace mock state)
+- Docker Compose for local development
 
 ## License
 
