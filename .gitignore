@@ -27,3 +27,46 @@ target
 .env
 .env.local
 .env.*
+
+# --- Dependencies ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- Build output ---
+dist/
+build/
+
+# --- IDE / Editor ---
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# --- Logs & debug ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# --- Coverage ---
+coverage/
+.coverage
+*.coverage.*
+htmlcov/

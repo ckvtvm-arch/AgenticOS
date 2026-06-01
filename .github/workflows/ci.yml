@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dashboard-lint:
+    name: Dashboard — Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./agentic-ai-os-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ./agentic-ai-os-dashboard/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+  # Dashboard build is commented out until we add a build script
+  # dashboard-build:
+  #   name: Dashboard — Build
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: ./agentic-ai-os-dashboard
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: 'npm'
+  #         cache-dependency-path: ./agentic-ai-os-dashboard/package-lock.json
+  #     - run: npm ci
+  #     - run: npm run build
