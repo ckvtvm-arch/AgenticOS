@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - /app/venv
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./agenticos.db
+      - PYTHONUNBUFFERED=1
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  dashboard:
+    build:
+      context: ./agentic-ai-os-dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./agentic-ai-os-dashboard:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://backend:8000
+      - VITE_WS_URL=ws://backend:8000/ws
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+
+networks:
+  default:
+    name: agenticos-network

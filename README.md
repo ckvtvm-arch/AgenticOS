@@ -14,9 +14,51 @@ This repository currently provides a developer dashboard and initial UI componen
 
 ## Quick project layout
 
-- `agentic-ai-os-dashboard/` — Vite + React dashboard used for local development and demos
+- `backend/` — FastAPI backend server with REST + WebSocket endpoints
+- `agentic-ai-os-dashboard/` — Vite + React dashboard
 
-## Quick start — dashboard (local dev)
+## Quick start — Docker Compose (Recommended)
+
+Prerequisites
+- Docker Desktop (or Docker Engine + Docker Compose)
+
+Steps
+1. Start all services:
+   ```bash
+   docker-compose up
+   ```
+2. Access the dashboard at: http://localhost:3000
+3. Backend API is available at: http://localhost:8000
+4. API documentation at: http://localhost:8000/docs
+
+## Quick start — Local development
+
+### Backend (Python + FastAPI)
+
+Prerequisites
+- Python 3.12+
+- pip
+
+Steps
+1. Change into the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Start the backend server:
+   ```bash
+   uvicorn app.main:app --reload --port 8000
+   ```
+
+### Dashboard (React + Vite)
 
 Prerequisites
 - Node.js 18+ (LTS recommended)
@@ -24,16 +66,22 @@ Prerequisites
 
 Steps
 1. Change into the dashboard directory:
-   - `cd agentic-ai-os-dashboard`
+   ```bash
+   cd agentic-ai-os-dashboard
+   ```
 2. Install dependencies:
-   - `npm ci` (preferred for CI reproducibility) or `npm install`
+   ```bash
+   npm ci
+   ```
 3. Configure local environment (optional):
    - Create `.env.local` and add any keys the dashboard expects (example):
      - `GEMINI_API_KEY=your_key_here`
 4. Start the dev server:
-   - `npm run dev`
+   ```bash
+   npm run dev
+   ```
 
-The dev server will print a local URL. Default Vite port is 5173, but this project is configured for http://localhost:3000 (see `agentic-ai-os-dashboard/vite.config.ts`).
+The dashboard will be available at http://localhost:3000 and will connect to the backend at http://localhost:8000.
 
 Building for production
 - From `agentic-ai-os-dashboard/` run `npm run build`. The production output is placed in `dist/`.

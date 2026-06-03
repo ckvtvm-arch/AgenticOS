@@ -57,8 +57,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+*.db
 venv/
-.venv/
+**/.venv/
 *.egg-info/
 .eggs/
 dist/
