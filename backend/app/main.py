@@ -1,230 +1,168 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import asyncio
-import json
 from datetime import datetime
+import asyncio
+import os
 from typing import List, Dict, Optional
-import random
 
-from .database import init_db, get_db
-from .models import Agent, Resource, SystemService, AgentStatus, ResourceType, SystemServiceStatus
+from .database import init_db
+from .models import AgentStatus, Resource
 from .schemas import AgentCreate, AgentUpdate, AgentResponse, ResourceResponse, SystemServiceResponse
+from .runtime.manager import RuntimeManager
 
-# Global state for simulation (in production, this would come from the database/agent runtime)
-agents_db: Dict[str, Agent] = {}
-resources_db: List[Resource] = []
-services_db: List[SystemService] = []
+active_connections: List[WebSocket] = []
+BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize database
     await init_db()
-    
-    # Initialize mock data
-    await initialize_mock_data()
-    
-    # Start background tasks
-    asyncio.create_task(update_resources_periodically())
-    asyncio.create_task(update_agents_periodically())
-    
+
+    runtime_manager = RuntimeManager(backend_url=BACKEND_URL)
+    runtime_manager.set_update_callback(lambda: asyncio.create_task(broadcast_update()))
+    app.state.runtime_manager = runtime_manager
+    await app.state.runtime_manager.start()
+
+    app.state.runtime_manager.register_agent(
+        name='CodeOptimizer',
+        script_name='hello_agent.py',
+        priority=10,
+        capabilities=['optimization', 'analysis'],
+        metadata={'version': '0.1', 'author': 'AgenticOS'},
+    )
+    app.state.runtime_manager.register_agent(
+        name='DataAnalyzer',
+        script_name='cpu_agent.py',
+        priority=20,
+        capabilities=['analysis', 'compute'],
+        metadata={'version': '0.1', 'author': 'AgenticOS'},
+    )
+
     yield
-    
-    # Cleanup
-    # (Any cleanup code would go here)
+
+    for websocket in list(active_connections):
+        await websocket.close()
 
 app = FastAPI(
-    title="AgenticOS Backend API",
-    description="Backend API for AgenticOS Dashboard",
-    version="0.1.0",
-    lifespan=lifespan
+    title='AgenticOS Backend API',
+    description='Backend API for AgenticOS Dashboard',
+    version='0.2.0',
+    lifespan=lifespan,
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to specific origins
+    allow_origins=['*'],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
-# WebSocket connections
-active_connections: List[WebSocket] = []
 
-async def initialize_mock_data():
-    """Initialize mock data for demonstration"""
-    global agents_db, resources_db, services_db
-    
-    # Initialize agents
-    agents_db = {
-        "agent-001": Agent(
-            id="agent-001",
-            name="CodeOptimizer",
-            status=AgentStatus.Running,
-            resource_usage={"cpu": 25, "gpu": 60, "memory": 30}
-        ),
-        "agent-002": Agent(
-            id="agent-002",
-            name="DataAnalyzer",
-            status=AgentStatus.Running,
-            resource_usage={"cpu": 45, "gpu": 75, "memory": 50}
-        ),
-        "agent-003": Agent(
-            id="agent-003",
-            name="SystemMonitor",
-            status=AgentStatus.Idle,
-            resource_usage={"cpu": 5, "gpu": 2, "memory": 10}
-        ),
-        "agent-004": Agent(
-            id="agent-004",
-            name="UITaskAutomator",
-            status=AgentStatus.Paused,
-            resource_usage={"cpu": 10, "gpu": 5, "memory": 15}
-        ),
-        "agent-005": Agent(
-            id="agent-005",
-            name="ResearchAggregator",
-            status=AgentStatus.Terminated,
-            resource_usage={"cpu": 0, "gpu": 0, "memory": 0}
-        ),
-    }
-    
-    # Initialize resources
-    resources_db = [
-        Resource(type=ResourceType.CPU, usage=45, total=16, unit="Cores"),
-        Resource(type=ResourceType.GPU, usage=78, total=24, unit="GB VRAM"),
-        Resource(type=ResourceType.Memory, usage=62, total=64, unit="GB RAM"),
-        Resource(type=ResourceType.TokenBudget, usage=85, total=1000000, unit="Tokens/hr"),
-    ]
-    
-    # Initialize system services
-    services_db = [
-        SystemService(name="Agent Registry", status=SystemServiceStatus.Online),
-        SystemService(name="Inference Engine", status=SystemServiceStatus.Online),
-        SystemService(name="Context Management", status=SystemServiceStatus.Degraded),
-        SystemService(name="Tool Execution", status=SystemServiceStatus.Online),
-        SystemService(name="Communication Bus", status=SystemServiceStatus.Offline),
-    ]
+def get_runtime() -> RuntimeManager:
+    runtime = getattr(app.state, 'runtime_manager', None)
+    if runtime is None:
+        raise RuntimeError('Runtime manager has not been initialized')
+    return runtime
 
-async def update_resources_periodically():
-    """Simulate resource fluctuation"""
-    global resources_db
-    while True:
-        await asyncio.sleep(2)
-        for resource in resources_db:
-            resource.usage = max(10, min(95, resource.usage + (random.random() - 0.5) * 5))
-        await broadcast_update()
 
-async def update_agents_periodically():
-    """Simulate agent status changes"""
-    global agents_db
-    while True:
-        await asyncio.sleep(2)
-        for agent in agents_db.values():
-            if agent.status != AgentStatus.Terminated:
-                agent.resource_usage["cpu"] = max(5, min(90, agent.resource_usage["cpu"] + (random.random() - 0.5) * 10))
-                agent.resource_usage["gpu"] = max(2, min(95, agent.resource_usage["gpu"] + (random.random() - 0.5) * 15))
-                agent.resource_usage["memory"] = max(10, min(80, agent.resource_usage["memory"] + (random.random() - 0.5) * 5))
-        await broadcast_update()
-
-async def broadcast_update():
-    """Broadcast updates to all connected WebSocket clients"""
+async def broadcast_update() -> None:
+    runtime = get_runtime()
     update_data = {
-        "type": "update",
-        "timestamp": datetime.utcnow().isoformat(),
-        "agents": [agent.model_dump() for agent in agents_db.values()],
-        "resources": [resource.model_dump() for resource in resources_db],
-        "services": [service.model_dump() for service in services_db],
+        'type': 'update',
+        'timestamp': datetime.utcnow().isoformat(),
+        'agents': runtime.list_agents(),
+        'resources': [resource.model_dump() for resource in runtime.get_resources()],
+        'services': [service.model_dump() for service in runtime.get_services()],
     }
-    
-    disconnected = []
+
+    disconnected: List[WebSocket] = []
     for connection in active_connections:
         try:
             await connection.send_json(update_data)
-        except:
+        except Exception:
             disconnected.append(connection)
-    
-    # Remove disconnected clients
+
     for connection in disconnected:
-        active_connections.remove(connection)
+        if connection in active_connections:
+            active_connections.remove(connection)
 
-# REST API Endpoints
 
-@app.get("/api/agents", response_model=List[AgentResponse])
+@app.get('/api/agents', response_model=List[AgentResponse])
 async def get_agents():
-    """Get all agents with status and resource usage"""
-    return [agent for agent in agents_db.values()]
+    return [AgentResponse(**agent) for agent in get_runtime().list_agents()]
 
-@app.get("/api/agents/{agent_id}", response_model=AgentResponse)
+
+@app.get('/api/agents/{agent_id}', response_model=AgentResponse)
 async def get_agent(agent_id: str):
-    """Get a specific agent by ID"""
-    if agent_id not in agents_db:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    return agents_db[agent_id]
+    agent = get_runtime().get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail='Agent not found')
+    return AgentResponse(**agent.to_dict())
 
-@app.post("/api/agents", response_model=AgentResponse)
+
+@app.post('/api/agents', response_model=AgentResponse)
 async def create_agent(agent_data: AgentCreate):
-    """Create a new agent"""
-    agent_id = f"agent-{len(agents_db) + 1:03d}"
-    new_agent = Agent(
-        id=agent_id,
+    script_name = agent_data.script_name or 'hello_agent.py'
+    agent = get_runtime().register_agent(
         name=agent_data.name,
-        status=AgentStatus.Idle,
-        resource_usage={"cpu": 0, "gpu": 0, "memory": 0}
+        script_name=script_name,
+        priority=agent_data.priority or 50,
+        capabilities=agent_data.capabilities or [],
+        metadata=agent_data.metadata or {},
     )
-    agents_db[agent_id] = new_agent
-    await broadcast_update()
-    return new_agent
+    return AgentResponse(**agent.to_dict())
 
-@app.post("/api/agents/{agent_id}/action")
+
+@app.post('/api/agents/{agent_id}/action')
 async def agent_action(agent_id: str, action: AgentUpdate):
-    """Perform an action on an agent (pause, resume, terminate)"""
-    if agent_id not in agents_db:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    
-    agent = agents_db[agent_id]
-    
-    if action.status == AgentStatus.Paused:
-        agent.status = AgentStatus.Paused
-    elif action.status == AgentStatus.Running:
-        agent.status = AgentStatus.Running
-    elif action.status == AgentStatus.Terminated:
-        agent.status = AgentStatus.Terminated
-        agent.resource_usage = {"cpu": 0, "gpu": 0, "memory": 0}
-    
-    await broadcast_update()
-    return {"message": f"Agent {agent_id} {action.status.value}"}
+    result = get_runtime().action(agent_id, action.status)
+    if result is None:
+        raise HTTPException(status_code=404, detail='Agent not found')
+    return {'message': f'Agent {agent_id} {action.status.value}'}
 
-@app.get("/api/resources", response_model=List[ResourceResponse])
+
+@app.post('/api/agents/{agent_id}/heartbeat')
+async def agent_heartbeat(agent_id: str):
+    result = get_runtime().heartbeat(agent_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail='Agent not found')
+    return {'message': 'Heartbeat received', 'agent_id': agent_id}
+
+
+@app.get('/api/agents/discover', response_model=List[AgentResponse])
+async def discover_agents(capability: str = Query(..., description='Capability to discover')):
+    results = get_runtime().discover(capability)
+    return [AgentResponse(**agent) for agent in results]
+
+
+@app.get('/api/resources', response_model=List[ResourceResponse])
 async def get_resources():
-    """Get system resource metrics"""
-    return resources_db
+    return [ResourceResponse(**resource.model_dump()) for resource in get_runtime().get_resources()]
 
-@app.get("/api/services", response_model=List[SystemServiceResponse])
+
+@app.get('/api/services', response_model=List[SystemServiceResponse])
 async def get_services():
-    """Get system service health status"""
-    return services_db
+    return [SystemServiceResponse(**service.model_dump()) for service in get_runtime().get_services()]
 
-# WebSocket endpoint for real-time updates
 
-@app.websocket("/ws")
+@app.websocket('/ws')
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     active_connections.append(websocket)
-    
     try:
         while True:
-            # Keep connection alive
-            data = await websocket.receive_text()
-            # Handle incoming messages if needed
+            await websocket.receive_text()
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
+        if websocket in active_connections:
+            active_connections.remove(websocket)
 
-@app.get("/")
+
+@app.get('/')
 async def root():
-    return {"message": "AgenticOS Backend API", "version": "0.1.0"}
+    return {'message': 'AgenticOS Backend API', 'version': '0.2.0'}
 
-@app.get("/health")
+
+@app.get('/health')
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()}
