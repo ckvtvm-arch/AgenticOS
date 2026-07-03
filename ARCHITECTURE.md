@@ -1,7 +1,7 @@
 # AgenticOS Architecture
 
-> **Version:** 1.0  
-> **Last updated:** May 2026  
+> **Version:** 1.1  
+> **Last updated:** July 2026  
 > **Status:** Planning / Early Development
 
 ---
@@ -144,6 +144,55 @@ Tools and interfaces for developers and end users.
 
 ---
 
+### 4. Federation Layer (Phase 7)
+
+Everything above describes a single AgenticOS node. The Federation Layer is what lets independently-operated nodes discover each other over the open web and verify each other's claims without a shared operator — it sits beside the node stack, not inside it.
+
+```
+┌───────────────────────┐             ┌───────────────────────┐
+│     AgenticOS Node A   │             │     AgenticOS Node B   │
+│ (Kernel/Services/User  │             │ (Kernel/Services/User  │
+│  Space, as above)      │             │  Space, as above)      │
+└───────────┬───────────┘             └───────────┬───────────┘
+            │                                     │
+            ▼                                     ▼
+┌───────────────────────────────────────────────────────────────┐
+│                       Federation Layer                        │
+│  ┌────────────┐  ┌───────────────────┐  ┌────────────────────┐│
+│  │ Node ID &  │  │ Capability         │  │ Federated Message  ││
+│  │ Discovery  │  │ Attestation &      │  │ Relay (signed,     ││
+│  │ (DID)      │  │ Revocation Registry│  │ encrypted, WAN)    ││
+│  └────────────┘  └───────────────────┘  └────────────────────┘│
+└──────────────────────────────┬──────────────────────────────────┘
+                                ▼
+                  ┌───────────────────────────┐
+                  │   Public Chain / L2        │
+                  │   (identity anchors, audit │
+                  │    log roots — not live    │
+                  │    traffic or execution)   │
+                  └───────────────────────────┘
+```
+
+#### Node Identity & Discovery
+- **Responsibility:** Give every node and agent a portable, cryptographically verifiable identity that isn't scoped to one operator's database.
+- **Mechanism:** Ed25519 keypair per node/agent; DID (`did:key`) as the identity format; a bootstrap directory service for peer discovery, with DHT/libp2p-style discovery as a later upgrade.
+
+#### Capability Attestation & Revocation Registry
+- **Responsibility:** Let one node trust another node's claim about what an agent can do, without contacting the issuer.
+- **Mechanism:** Capability claims are signed credentials, verifiable offline; a revocation registry (synced between nodes) invalidates compromised or retired credentials.
+
+#### Federated Message Relay
+- **Responsibility:** Extend the in-process Communication Bus (System Services layer) across the WAN between mutually untrusted nodes.
+- **Mechanism:** Signed and encrypted messages, nonce+timestamp replay protection, per-peer rate limiting.
+
+#### Audit Anchor Service
+- **Responsibility:** Make agent action/audit logs tamper-evident across the network without putting live traffic on-chain.
+- **Mechanism:** Periodically hash audit logs into a Merkle root; anchor only the root to a public chain or L2; provide inclusion proofs for individual log entries.
+
+**Deliberately out of scope for now:** on-chain payments/escrow. A trust-minimized marketplace (task payment, staking/slashing, dispute resolution) is a natural extension once attestation and audit anchoring are proven with real cross-node usage, but is not designed against hypothetical usage patterns — see Roadmap Milestone 7.4.
+
+---
+
 ## Data Flow
 
 ```
@@ -187,6 +236,10 @@ Tools and interfaces for developers and end users.
 | Kernel | Isolation Engine | ❌ Not Started | |
 | Dev | ADK (SDK) | ❌ Not Started | |
 | Dev | CLI | ❌ Not Started | |
+| Federation | Node ID & Discovery | ❌ Not Started | Phase 7.1/7.2 |
+| Federation | Capability Attestation Registry | ❌ Not Started | Phase 7.1 |
+| Federation | Federated Message Relay | ❌ Not Started | Phase 7.2 |
+| Federation | Audit Anchor Service | ❌ Not Started | Phase 7.3 |
 
 ---
 
@@ -201,6 +254,9 @@ Tools and interfaces for developers and end users.
 | Agent Runtime | Python subprocesses → containers | Iterate fast, then isolate |
 | Serialization | Protocol Buffers | Compact, typed, cross-language |
 | Model Serving | ONNX Runtime | Multi-framework support |
+| Node/Agent Identity | DID (`did:key`) + Ed25519 | Portable identity, no chain dependency for basic verification |
+| Audit Anchoring | Public L2 (chain TBD) | Low-cost, high-finality anchor point; avoid mainnet gas costs for periodic roots |
+| Federated Transport | libp2p (candidate) | NAT traversal, pub/sub, built for WAN peer-to-peer |
 
 ---
 
@@ -211,3 +267,5 @@ Tools and interfaces for developers and end users.
 3. **Observable:** Every agent action is logged and measurable.
 4. **Capability-based:** Agents get minimum permissions needed.
 5. **Pluggable:** Each service can be swapped (inference backend, database, etc.).
+6. **Trust-minimized federation:** Nodes verify other nodes' claims cryptographically rather than trusting a central operator.
+7. **On-chain minimalism:** Only identity, capability attestation, and audit anchors touch a blockchain — execution, scheduling, and messaging stay off-chain.

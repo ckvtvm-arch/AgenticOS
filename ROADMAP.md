@@ -192,6 +192,37 @@
 
 ---
 
+## Phase 7: Federation & Trust Network
+
+**Goal:** Let independently-operated AgenticOS nodes discover each other over the open web and verify each other's agents' identity and capabilities without a shared operator. Blockchain use is scoped narrowly — identity, attestation, and audit anchoring only. Execution, scheduling, and messaging stay off-chain, consistent with the local-first design principle.
+
+### Milestone 7.1 — Decentralized Identity & Capability Attestation
+- Ed25519 keypair per node and per agent; DID (`did:key`) as portable identity
+- Signed capability credentials — an agent's capability claim is a credential signed by its issuing node, verifiable by any other node offline
+- Local revocation registry with a sync endpoint
+- `verify_credential(credential)` — validate a capability claim without contacting the issuer
+
+### Milestone 7.2 — Federated Discovery & Communication
+- Node registry: publish/discover peer endpoints + public keys (bootstrap via a shared directory service first; DHT/libp2p-style discovery later)
+- Signed, encrypted inter-node messages — extends the Communication Bus (Phase 4.4) from a local broker to a WAN transport
+- Replay protection (nonce + timestamp) and per-peer rate limiting
+
+### Milestone 7.3 — Immutable Audit Anchoring
+- Periodic hashing of agent action/audit logs into a Merkle root per interval
+- Anchor Merkle roots to a public chain or L2 (chain selection deferred; prototype on a testnet)
+- `verify_anchor(entry, root)` — prove a historical log entry is included in an anchored root
+
+### Milestone 7.4 — Trust-Minimized Marketplace (Exploratory)
+- Escrow contract for cross-node task payment
+- Staking/slashing tied to the reputation built from 7.1–7.3 attestation history
+- Dispute resolution process
+- Deferred until 7.1–7.3 are validated with real cross-node usage — payments are the highest-risk, highest-complexity piece and shouldn't be designed against hypothetical usage patterns
+
+**Timeline:** 10–14 weeks for Milestones 7.1–7.3. Milestone 7.4 is exploratory — no estimate until scope is validated by real usage.
+**Dependencies:** Phase 4 (Communication Bus), Phase 5 (Capability Model)
+
+---
+
 ## Timeline Summary
 
 ```
@@ -202,10 +233,12 @@ Phase 3: ADK                     ███████████████�
 Phase 4: System Services         ████████████████████░  12 weeks
 Phase 5: Security                █████████████████████  8 weeks
 Phase 6: Production              █████████████████████  12+ weeks
+Phase 7: Federation & Trust      █████████████░░░░░░░░  10-14+ weeks
 ```
 
 **Total estimated time to MVP (Phases 0–2):** ~10 weeks  
-**Total estimated time to production (Phases 0–5):** ~34 weeks
+**Total estimated time to production (Phases 0–5):** ~34 weeks  
+**Total estimated time to a federated network (Phases 0–7):** ~44+ weeks, with Milestone 7.4 open-ended
 
 ---
 
