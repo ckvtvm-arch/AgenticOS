@@ -6,7 +6,7 @@ import asyncio
 import os
 from typing import List, Dict, Optional
 
-from .database import init_db
+from .database import init_db, load_agents, upsert_agents
 from .models import AgentStatus, Resource
 from .schemas import AgentCreate, AgentUpdate, AgentResponse, ResourceResponse, SystemServiceResponse
 from .runtime.manager import RuntimeManager
@@ -19,24 +19,44 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     runtime_manager = RuntimeManager(backend_url=BACKEND_URL)
-    runtime_manager.set_update_callback(lambda: asyncio.create_task(broadcast_update()))
-    app.state.runtime_manager = runtime_manager
-    await app.state.runtime_manager.start()
 
-    app.state.runtime_manager.register_agent(
-        name='CodeOptimizer',
-        script_name='hello_agent.py',
-        priority=10,
-        capabilities=['optimization', 'analysis'],
-        metadata={'version': '0.1', 'author': 'AgenticOS'},
-    )
-    app.state.runtime_manager.register_agent(
-        name='DataAnalyzer',
-        script_name='cpu_agent.py',
-        priority=20,
-        capabilities=['analysis', 'compute'],
-        metadata={'version': '0.1', 'author': 'AgenticOS'},
-    )
+    def on_runtime_change() -> None:
+        asyncio.create_task(broadcast_update())
+        asyncio.create_task(persist_agents())
+
+    runtime_manager.set_update_callback(on_runtime_change)
+    app.state.runtime_manager = runtime_manager
+
+    persisted = await load_agents()
+    if persisted:
+        for record in persisted:
+            runtime_manager.register_agent(
+                agent_id=record['id'],
+                name=record['name'],
+                script_name=record['script_name'],
+                priority=record['priority'],
+                capabilities=record['capabilities'],
+                metadata=record['metadata'],
+                cpu_quota_seconds=record['cpu_quota_seconds'],
+                spawn_now=record['status'] != AgentStatus.Terminated.value,
+            )
+    else:
+        runtime_manager.register_agent(
+            name='CodeOptimizer',
+            script_name='hello_agent.py',
+            priority=10,
+            capabilities=['optimization', 'analysis'],
+            metadata={'version': '0.1', 'author': 'AgenticOS'},
+        )
+        runtime_manager.register_agent(
+            name='DataAnalyzer',
+            script_name='cpu_agent.py',
+            priority=20,
+            capabilities=['analysis', 'compute'],
+            metadata={'version': '0.1', 'author': 'AgenticOS'},
+        )
+
+    await app.state.runtime_manager.start()
 
     yield
 
@@ -64,6 +84,14 @@ def get_runtime() -> RuntimeManager:
     if runtime is None:
         raise RuntimeError('Runtime manager has not been initialized')
     return runtime
+
+
+persist_lock = asyncio.Lock()
+
+
+async def persist_agents() -> None:
+    async with persist_lock:
+        await upsert_agents(get_runtime().list_agents())
 
 
 async def broadcast_update() -> None:

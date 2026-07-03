@@ -180,8 +180,9 @@ class AgentRegistry:
         metadata: Optional[Dict[str, str]] = None,
         cpu_quota_seconds: int = 20,
         spawn_now: bool = True,
+        agent_id: Optional[str] = None,
     ) -> AgentProcess:
-        agent_id = f"agent-{len(self.agents) + 1:03d}"
+        agent_id = agent_id or f"agent-{len(self.agents) + 1:03d}"
         agent = AgentProcess(
             id=agent_id,
             name=name,
