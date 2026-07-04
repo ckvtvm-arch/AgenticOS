@@ -40,6 +40,7 @@ class AgentProcess:
     max_retries: int = DEFAULT_MAX_RETRIES
     cpu_percent: float = 0.0
     memory_mb: float = 0.0
+    manual_stop: bool = False
     _proc_handle: Optional[psutil.Process] = None
 
     @property
@@ -83,6 +84,7 @@ class AgentProcess:
         self._proc_handle = psutil.Process(self.pid)
         self.cpu_percent = 0.0
         self.memory_mb = 0.0
+        self.manual_stop = False
 
     def pause(self) -> None:
         if self.is_alive() and self.pid:
@@ -94,7 +96,7 @@ class AgentProcess:
             os.kill(self.pid, signal.SIGCONT)
             self.status = AgentStatus.Running
 
-    def terminate(self) -> None:
+    def terminate(self, manual: bool = False) -> None:
         if self.process and self.is_alive():
             self.process.terminate()
             try:
@@ -105,6 +107,8 @@ class AgentProcess:
         self.terminated_at = datetime.utcnow()
         self.pid = None
         self._proc_handle = None
+        if manual:
+            self.manual_stop = True
 
     def is_alive(self) -> bool:
         return self.process is not None and self.process.poll() is None
@@ -125,6 +129,8 @@ class AgentProcess:
 
     def needs_restart(self) -> bool:
         if self.status == AgentStatus.Terminated:
+            if self.manual_stop:
+                return False
             return self.retries < self.max_retries
         if self.heartbeat_at is None:
             return False
@@ -264,20 +270,20 @@ class Scheduler:
         self.max_running = max_running
 
     def schedule(self) -> None:
+        # Only Idle (never-yet-spawned) agents are auto-scheduled. Paused agents were
+        # explicitly stopped by the user via the API and must stay stopped until they
+        # explicitly resume them - the scheduler must not undo that.
         running = [agent for agent in self.registry.list_agents() if agent.status == AgentStatus.Running and agent.is_alive()]
         if len(running) >= self.max_running:
             return
 
-        idle_agents = [agent for agent in self.registry.list_agents() if agent.status in {AgentStatus.Idle, AgentStatus.Paused}]
+        idle_agents = [agent for agent in self.registry.list_agents() if agent.status == AgentStatus.Idle]
         if not idle_agents:
             return
 
         idle_agents.sort(key=lambda a: (a.priority, a.created_at))
         next_agent = idle_agents[0]
-        if next_agent.status == AgentStatus.Idle:
-            next_agent.spawn(self.registry.backend_url)
-        else:
-            next_agent.resume()
+        next_agent.spawn(self.registry.backend_url)
         self.registry._trigger_update()
 
 
@@ -316,7 +322,7 @@ class RuntimeManager:
             elif not agent.is_alive():
                 agent.spawn(self.registry.backend_url)
         elif action == AgentStatus.Terminated:
-            agent.terminate()
+            agent.terminate(manual=True)
         self.registry._trigger_update()
         return agent.to_dict()
 
