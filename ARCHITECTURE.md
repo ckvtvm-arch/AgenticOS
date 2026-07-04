@@ -1,6 +1,6 @@
 # AgenticOS Architecture
 
-> **Version:** 1.1  
+> **Version:** 1.2  
 > **Last updated:** July 2026  
 > **Status:** Planning / Early Development
 
@@ -35,6 +35,7 @@ AgenticOS is designed as a layered system where AI agents are first-class execut
 │  CPU  │  GPU/TPU  │  RAM  │  Storage  │  Network    │
 └─────────────────────────────────────────────────────┘
 ```
+*(Goal Manager and Policy Decision Point — added in Phase 4 — are omitted above for space; see System Services Layer below.)*
 
 ---
 
@@ -62,7 +63,7 @@ The kernel is the core of AgenticOS, responsible for low-level resource manageme
 - **Responsibility:** Sandbox agents to prevent interference and contain failures.
 - **Mechanisms:**
   - Namespace isolation (filesystem, network, process).
-  - Capability-based security tokens.
+  - Capability-based security tokens, enforced via the Policy Decision Point (System Services) rather than left to each agent's own code.
   - Resource quotas (CPU %, memory limit, GPU fraction).
   - Audit logging of all agent syscalls.
 
@@ -80,6 +81,21 @@ A set of long-running daemons that provide foundational capabilities to all agen
   - `heartbeat(agent_id)` — health check ping.
   - `deregister(agent_id)` — agent shutdown.
 - **Storage:** In-memory with SQLite persistence for recovery.
+
+#### Goal Manager (Phase 4)
+- **Responsibility:** Track what agents are actually trying to accomplish, not just whether they're alive.
+- **API:**
+  - `submit_goal(description, agent_id)` — create a `Goal`/`Task`, optionally decomposed into subtasks.
+  - `get_goal(goal_id)` — status (`pending`/`in_progress`/`succeeded`/`failed`) and result.
+  - `cancel_goal(goal_id)` — propagate cancellation to in-flight subtasks.
+- **Storage:** SQLite, alongside the agent registry.
+- This is the prerequisite the Agent Orchestration Framework (User Space) sequences work against — without it there is nothing for an orchestrator to orchestrate.
+
+#### Policy Decision Point (Phase 4)
+- **Responsibility:** Decide whether an agent is allowed to take a given action, before it happens — not describe what it claims to be capable of after the fact.
+- **API:** `check(agent_id, action) -> allow/deny`, called from the Tool Execution Framework and from Goal Manager assignment.
+- **Policy:** deny-by-default; capabilities must be explicitly granted at registration. Every decision is written to the audit log.
+- Phase 6's Capability Model extends this same decision engine down to the process/container boundary — the enforcement point gets stronger over time, but the decision logic doesn't fork into two separate systems.
 
 #### Inference Engine Service
 - **Responsibility:** Serve ML model inference to agents.
@@ -137,6 +153,7 @@ Tools and interfaces for developers and end users.
 - Natural language interface to OS functions.
 
 #### Agent Orchestration Framework
+- Sequences work against the Goal Manager's `Goal`/`Task` graph (Phase 4) — it does not maintain its own separate notion of what agents are doing.
 - Define multi-agent workflows as DAGs.
 - Coordination patterns: sequential, parallel, map/reduce, hierarchical.
 - Error handling: retry, fallback, circuit breaker.
@@ -144,7 +161,7 @@ Tools and interfaces for developers and end users.
 
 ---
 
-### 4. Federation Layer (Phase 7)
+### 4. Federation Layer (Phase 8)
 
 Everything above describes a single AgenticOS node. The Federation Layer is what lets independently-operated nodes discover each other over the open web and verify each other's claims without a shared operator — it sits beside the node stack, not inside it.
 
@@ -189,7 +206,7 @@ Everything above describes a single AgenticOS node. The Federation Layer is what
 - **Responsibility:** Make agent action/audit logs tamper-evident across the network without putting live traffic on-chain.
 - **Mechanism:** Periodically hash audit logs into a Merkle root; anchor only the root to a public chain or L2; provide inclusion proofs for individual log entries.
 
-**Deliberately out of scope for now:** on-chain payments/escrow. A trust-minimized marketplace (task payment, staking/slashing, dispute resolution) is a natural extension once attestation and audit anchoring are proven with real cross-node usage, but is not designed against hypothetical usage patterns — see Roadmap Milestone 7.4.
+**Deliberately out of scope for now:** on-chain payments/escrow. A trust-minimized marketplace (task payment, staking/slashing, dispute resolution) is a natural extension once attestation and audit anchoring are proven with real cross-node usage, but is not designed against hypothetical usage patterns — see Roadmap Milestone 8.4.
 
 ---
 
@@ -224,22 +241,25 @@ Everything above describes a single AgenticOS node. The Federation Layer is what
 | UI | ResourceMonitor | ✅ Done | Animated progress bars |
 | UI | SystemStatus | ✅ Done | Service health indicators |
 | UI | ArchitectureView | ✅ Done | Static layer diagram |
-| API | Backend Server | ❌ Not Started | FastAPI planned |
-| API | WebSocket | ❌ Not Started | For real-time dashboard |
-| Services | Agent Registry | ❌ Not Started | |
+| API | Backend Server | ✅ Done | FastAPI, `backend/app/main.py` |
+| API | WebSocket | ✅ Done | Broadcasts on every registry change |
+| Services | Agent Registry | ✅ Done | SQLite-persisted, survives restarts |
+| Services | Goal Manager | ❌ Not Started | Phase 4.1 |
+| Services | Policy Decision Point | ❌ Not Started | Phase 4.2 — no enforced permissions exist today |
 | Services | Inference Engine | ❌ Not Started | |
 | Services | Context Management | ❌ Not Started | |
 | Services | Tool Execution | ❌ Not Started | |
 | Services | Communication Bus | ❌ Not Started | |
-| Kernel | Agent Scheduler | ❌ Not Started | |
+| Kernel | Agent Scheduler | ⚠️ Partial | Basic priority queue + pause/resume; no cgroups, no fairness policy |
 | Kernel | Memory Manager | ❌ Not Started | |
-| Kernel | Isolation Engine | ❌ Not Started | |
-| Dev | ADK (SDK) | ❌ Not Started | |
-| Dev | CLI | ❌ Not Started | |
-| Federation | Node ID & Discovery | ❌ Not Started | Phase 7.1/7.2 |
-| Federation | Capability Attestation Registry | ❌ Not Started | Phase 7.1 |
-| Federation | Federated Message Relay | ❌ Not Started | Phase 7.2 |
-| Federation | Audit Anchor Service | ❌ Not Started | Phase 7.3 |
+| Kernel | Isolation Engine | ❌ Not Started | Agents run as bare subprocesses today — no namespace/seccomp isolation |
+| Dev | ADK (SDK) | ✅ Done | `backend/adk/sdk.py` |
+| Dev | CLI | ✅ Done | `agentic init/run/test/build` |
+| Dev | Orchestration Framework | ❌ Not Started | Phase 4.3 (foundations), Phase 7.2 (full engine) |
+| Federation | Node ID & Discovery | ❌ Not Started | Phase 8.1/8.2 |
+| Federation | Capability Attestation Registry | ❌ Not Started | Phase 8.1 |
+| Federation | Federated Message Relay | ❌ Not Started | Phase 8.2 |
+| Federation | Audit Anchor Service | ❌ Not Started | Phase 8.3 |
 
 ---
 
